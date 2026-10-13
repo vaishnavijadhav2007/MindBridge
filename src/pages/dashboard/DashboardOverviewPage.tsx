@@ -2,6 +2,7 @@ import React from 'react';
 import { Sparkles, Sun, Heart } from 'lucide-react';
 import { MoodCheckinCard } from '../../components/dashboard/MoodCheckinCard';
 import { MetricSummaryCards } from '../../components/dashboard/MetricSummaryCards';
+import { AICompanionShortcutCard } from '../../components/dashboard/AICompanionShortcutCard';
 import { RecommendedActivities } from '../../components/dashboard/RecommendedActivities';
 import { RecentActivityList } from '../../components/dashboard/RecentActivityList';
 import { ActivityModal } from '../../components/dashboard/ActivityModal';
@@ -43,6 +44,11 @@ export const DashboardOverviewPage: React.FC = () => {
       {/* THREE SUMMARY CARDS */}
       <section aria-label="Wellness Summary Metrics">
         <MetricSummaryCards />
+      </section>
+
+      {/* AI COMPANION SHORTCUT */}
+      <section aria-label="AI Wellness Companion Shortcut">
+        <AICompanionShortcutCard />
       </section>
 
       {/* RECOMMENDED FOR YOU */}
