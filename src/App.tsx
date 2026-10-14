@@ -12,10 +12,13 @@ import { WellnessPlanPage } from './pages/dashboard/WellnessPlanPage';
 import { TherapistsPage } from './pages/dashboard/TherapistsPage';
 import { SettingsPage } from './pages/dashboard/SettingsPage';
 
+import { WellnessActivityRouter } from './components/wellness/WellnessActivityRouter';
+
 export const App: React.FC = () => {
   return (
     <WellnessProvider>
       <BrowserRouter>
+        <WellnessActivityRouter />
         <Routes>
           {/* Landing Page */}
           <Route path="/" element={<LandingPage />} />

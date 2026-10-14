@@ -80,6 +80,19 @@ export const QuickActionsSection: React.FC<QuickActionsSectionProps> = ({
           );
         })}
       </div>
+
+      <div className="pt-1">
+        <a
+          href="/dashboard/wellness-plan"
+          className="flex items-center justify-between p-3 rounded-2xl bg-[#E9EFE7]/50 border border-[#D7E2D3] hover:bg-[#E9EFE7] transition-colors text-xs text-[#56664F] font-medium group"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-[#829675]" />
+            <span>Open My Wellness Plan</span>
+          </div>
+          <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+        </a>
+      </div>
     </div>
   );
 };

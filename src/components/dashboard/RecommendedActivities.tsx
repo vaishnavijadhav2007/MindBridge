@@ -1,5 +1,6 @@
 import React from 'react';
-import { Clock, Play, Wind, PenTool, Move, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Clock, Play, Wind, PenTool, Move, Sparkles, ArrowRight } from 'lucide-react';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Activity } from '../../types';
@@ -33,6 +34,14 @@ export const RecommendedActivities: React.FC = () => {
             Short, restorative practices suited for your day.
           </p>
         </div>
+
+        <Link
+          to="/dashboard/wellness-plan"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-[#829675] hover:text-[#56664F] transition-colors hover:underline"
+        >
+          <span>My Wellness Plan</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* 3 Activity Cards */}

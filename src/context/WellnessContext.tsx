@@ -1,5 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { MoodType, MoodEntry, Activity, ActivityLog, UserProfile, SleepQuality } from '../types';
+import { WellnessActivity, DailyPlanItem, FeedbackRecord, ActivityFeedback } from '../types/wellness';
+import {
+  ALL_ACTIVITIES,
+  DEFAULT_RECOMMENDATIONS,
+  getRecommendedActivities,
+} from '../services/wellnessActivities';
+
+// ─── Context Shape ──────────────────────────────────────────────────────────
 
 interface WellnessContextType {
   // Mood entries & operations
@@ -16,7 +24,7 @@ interface WellnessContextType {
   clearAllEntries: () => void;
   loadSampleEntries: () => void;
   hasUserEntries: boolean;
-  
+
   // Current active / latest mood
   selectedMood: MoodType | null;
   selectMood: (mood: MoodType) => void;
@@ -28,7 +36,7 @@ interface WellnessContextType {
   averageStress: number | null;
   completedCheckinsCount: number;
 
-  // User & activities
+  // Legacy activity modal (used by Dashboard)
   userProfile: UserProfile;
   recommendedActivities: Activity[];
   recentActivities: ActivityLog[];
@@ -37,14 +45,54 @@ interface WellnessContextType {
   closeActivityModal: () => void;
   completeActivity: (activityId: string) => void;
 
+  // ── Wellness Plan ──────────────────────────────────────────────
+  /** Full personalized recommendation list */
+  wellnessRecommendations: WellnessActivity[];
+
+  /** All activities in the catalog */
+  allWellnessActivities: WellnessActivity[];
+
+  /** Today's daily plan */
+  dailyPlan: DailyPlanItem[];
+  addToDailyPlan: (activityId: string) => void;
+  removeFromDailyPlan: (activityId: string) => void;
+  markPlanItemComplete: (activityId: string) => void;
+  replacePlanItem: (oldId: string, newId: string) => void;
+
+  /** Saved / bookmarked activities */
+  savedActivityIds: Set<string>;
+  toggleSaved: (activityId: string) => void;
+
+  /** Per-activity feedback */
+  feedbackRecord: Record<string, ActivityFeedback>;
+  recordFeedback: (activityId: string, feedback: ActivityFeedback) => void;
+  resetPersonalization: () => void;
+
+  /** Active wellness activity modal */
+  activeWellnessActivity: WellnessActivity | null;
+  openWellnessActivity: (activity: WellnessActivity) => void;
+  closeWellnessActivity: () => void;
+  completeWellnessActivity: (activityId: string) => void;
+
+  // Saved Therapists (Pune District)
+  savedTherapistIds: Set<string>;
+  toggleSaveTherapist: (therapistId: string) => void;
+  isTherapistSaved: (therapistId: string) => boolean;
+
   // Toasts
   toastMessage: string | null;
   showToast: (msg: string) => void;
 }
 
-const STORAGE_KEY = 'mindbridge_mood_entries_v2';
+// ─── Storage Keys ───────────────────────────────────────────────────────────
+const STORAGE_KEY          = 'mindbridge_mood_entries_v2';
+const SAVED_KEY            = 'mindbridge_saved_activities_v1';
+const PLAN_KEY             = 'mindbridge_daily_plan_v1';
+const FEEDBACK_KEY         = 'mindbridge_feedback_v1';
+const SAVED_THERAPISTS_KEY = 'mindbridge_saved_therapists_v1';
 
-// 4 realistic sample entries labeled clearly as demonstration data
+// ─── Sample Mood Data ────────────────────────────────────────────────────────
+
 const initialSampleEntries: MoodEntry[] = [
   {
     id: 'sample-1',
@@ -67,7 +115,7 @@ const initialSampleEntries: MoodEntry[] = [
     factors: ['Health', 'Something Good'],
     stressLevel: 2,
     sleepQuality: 'Good',
-    journalNote: 'Went for a morning walk in the park. Felt calm and grounded.',
+    journalNote: 'Went for a morning walk. Felt calm and grounded.',
     isSample: true,
   },
   {
@@ -79,7 +127,7 @@ const initialSampleEntries: MoodEntry[] = [
     factors: ['Sleep', 'Personal Concerns'],
     stressLevel: 4,
     sleepQuality: 'Poor',
-    journalNote: 'Didn’t sleep well last night. Feeling a bit drained.',
+    journalNote: 'Didn\'t sleep well. Feeling a bit drained.',
     isSample: true,
   },
   {
@@ -96,50 +144,51 @@ const initialSampleEntries: MoodEntry[] = [
   }
 ];
 
+// Legacy dashboard activities (kept for ActivityModal on dashboard)
 const defaultActivities: Activity[] = [
   {
     id: 'activity-breathing',
     title: 'Take a mindful breathing break',
     duration: '2 minutes',
     category: 'Breathing',
-    description: 'Inhale calm, exhale tension. A quick 4-4-4 box breathing practice to ground your nervous system.',
+    description: 'Inhale calm, exhale tension. A quick 4-4-4 box breathing practice.',
     steps: [
-      'Find a comfortable, upright seating position with your shoulders relaxed.',
-      'Breathe in slowly through your nose for 4 seconds, feeling your chest expand.',
-      'Gently hold your breath for 4 peaceful seconds.',
-      'Release the air through your mouth for 4 seconds, letting tension dissolve.',
-      'Repeat this gentle cycle for 5 rounds.'
+      'Find a comfortable, upright seating position.',
+      'Breathe in slowly through your nose for 4 seconds.',
+      'Gently hold your breath for 4 seconds.',
+      'Release the air through your mouth for 4 seconds.',
+      'Repeat this cycle for 5 rounds.',
     ],
-    tips: 'Allow your thoughts to pass like clouds. Just bring attention back to the breath.'
+    tips: 'Allow your thoughts to pass like clouds.',
   },
   {
     id: 'activity-journaling',
     title: 'Write down your thoughts',
     duration: '5 minutes',
     category: 'Journaling',
-    description: 'Release inner clutter onto the page. A gentle prompt-driven reflection to organize what you are feeling.',
+    description: 'Release inner clutter onto the page with a gentle prompt-driven reflection.',
     steps: [
-      'Take a sip of water and set away any distractions.',
-      'Reflect: "What is one thing that felt heavy today, and what is one small thing I appreciate?"',
-      'Jot down unedited thoughts without judging handwriting or grammar.',
-      'Notice any patterns in how your body feels as you put words to your emotions.'
+      'Set away any distractions.',
+      'Reflect: "What felt heavy today, and what do I appreciate?"',
+      'Write unedited thoughts without judgment.',
+      'Notice how your body feels as you put words to emotions.',
     ],
-    tips: 'No one else needs to read this. Your paper is a non-judgmental space.'
+    tips: 'No one else needs to read this.',
   },
   {
     id: 'activity-stretch',
     title: 'Take a screen break and stretch',
     duration: '5 minutes',
     category: 'Physical',
-    description: 'Soften eye strain and release tension held in your neck, shoulders, and spine after screen time.',
+    description: 'Soften eye strain and release tension in neck, shoulders, and spine.',
     steps: [
-      'Gently look away from your screen at a distant object 20 feet away for 20 seconds.',
-      'Roll your shoulders up toward your ears and smoothly slide them back and down 5 times.',
-      'Gently tilt your head right, bringing ear toward shoulder. Hold for 3 breaths, then repeat on the left.',
-      'Interlace fingers, reach your arms overhead, and take a deep rejuvenating stretch.'
+      'Look at a distant object for 20 seconds.',
+      'Roll your shoulders back and down 5 times.',
+      'Tilt your head to each side, holding for 3 breaths.',
+      'Stretch arms overhead and take a deep breath.',
     ],
-    tips: 'Movement brings oxygen and vitality back into the nervous system.'
-  }
+    tips: 'Movement brings oxygen back into the nervous system.',
+  },
 ];
 
 const initialRecentLogs: ActivityLog[] = [
@@ -149,7 +198,7 @@ const initialRecentLogs: ActivityLog[] = [
     type: 'mood',
     timestamp: 'Today, 9:15 AM',
     badge: 'Mood Log',
-    detail: 'Checked in feeling calm and balanced.'
+    detail: 'Checked in feeling calm and balanced.',
   },
   {
     id: 'log-2',
@@ -157,7 +206,7 @@ const initialRecentLogs: ActivityLog[] = [
     type: 'activity',
     timestamp: 'Today, 9:20 AM',
     badge: 'Completed • 2 min',
-    detail: 'Felt immediate release of tension in jaw and shoulders.'
+    detail: 'Felt immediate release of tension in jaw and shoulders.',
   },
   {
     id: 'log-3',
@@ -165,64 +214,64 @@ const initialRecentLogs: ActivityLog[] = [
     type: 'activity',
     timestamp: 'Yesterday, 3:30 PM',
     badge: 'Completed • 5 min',
-    detail: 'Refreshed energy before afternoon tasks.'
-  }
+    detail: 'Refreshed energy before afternoon tasks.',
+  },
 ];
+
+// ─── Helper – load today's plan from localStorage ───────────────────────────
+
+function loadTodayPlan(): DailyPlanItem[] {
+  try {
+    const raw = localStorage.getItem(PLAN_KEY);
+    if (!raw) return [];
+    const { date, items } = JSON.parse(raw) as { date: string; items: DailyPlanItem[] };
+    const today = new Date().toDateString();
+    if (date === today) return items;
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveTodayPlan(items: DailyPlanItem[]) {
+  try {
+    localStorage.setItem(PLAN_KEY, JSON.stringify({ date: new Date().toDateString(), items }));
+  } catch { /* ignore */ }
+}
+
+// ─── Context ─────────────────────────────────────────────────────────────────
 
 const WellnessContext = createContext<WellnessContextType | undefined>(undefined);
 
 export const WellnessProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load stored entries from localStorage, or use initialSampleEntries
+
+  // ── Mood Entries ────────────────────────────────────────────────────────────
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (e) {
-      console.warn('Could not read mood entries from localStorage:', e);
-    }
+    } catch { /* ignore */ }
     return initialSampleEntries;
   });
 
-  // Sync entries to localStorage whenever they change
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(moodEntries));
-    } catch (e) {
-      console.warn('Could not save mood entries to localStorage:', e);
-    }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(moodEntries)); } catch { /* ignore */ }
   }, [moodEntries]);
 
-  // Determine if there are actual non-sample user entries
   const hasUserEntries = moodEntries.some(e => !e.isSample);
-  
-  // Relevant entries to calculate metrics (only real user entries if they exist; otherwise sample entries)
-  const activeEntries = hasUserEntries
-    ? moodEntries.filter(e => !e.isSample)
-    : moodEntries;
-
+  const activeEntries = hasUserEntries ? moodEntries.filter(e => !e.isSample) : moodEntries;
   const latestEntry = activeEntries.length > 0 ? activeEntries[0] : null;
 
-  const [selectedMood, setSelectedMood] = useState<MoodType | null>(() => {
-    return latestEntry ? latestEntry.mood : 'good';
-  });
-
-  // Keep selectedMood aligned with latest entry
-  useEffect(() => {
-    if (latestEntry) {
-      setSelectedMood(latestEntry.mood);
-    }
-  }, [latestEntry]);
+  const [selectedMood, setSelectedMood] = useState<MoodType | null>(() => latestEntry?.mood ?? 'good');
+  useEffect(() => { if (latestEntry) setSelectedMood(latestEntry.mood); }, [latestEntry]);
 
   const [moodConfirmedMessage, setMoodConfirmedMessage] = useState<string | null>(null);
+
+  // ── Legacy dashboard state ──────────────────────────────────────────────────
   const [activeModalActivity, setActiveModalActivity] = useState<Activity | null>(null);
   const [recentActivities, setRecentActivities] = useState<ActivityLog[]>(initialRecentLogs);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'Sarah Chen',
     email: 'sarah.chen@example.com',
@@ -234,12 +283,82 @@ export const WellnessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(prev => prev === msg ? null : prev);
-    }, 3500);
+    setTimeout(() => setToastMessage(prev => prev === msg ? null : prev), 3500);
   };
 
-  // Add a new mood entry
+  // ── Wellness Plan State ─────────────────────────────────────────────────────
+
+  const [savedActivityIds, setSavedActivityIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(SAVED_KEY);
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch { /* ignore */ }
+    return new Set();
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify([...savedActivityIds])); } catch { /* ignore */ }
+  }, [savedActivityIds]);
+
+  const [feedbackRecord, setFeedbackRecord] = useState<Record<string, ActivityFeedback>>(() => {
+    try {
+      const raw = localStorage.getItem(FEEDBACK_KEY);
+      if (raw) return JSON.parse(raw) as Record<string, ActivityFeedback>;
+    } catch { /* ignore */ }
+    return {};
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(FEEDBACK_KEY, JSON.stringify(feedbackRecord)); } catch { /* ignore */ }
+  }, [feedbackRecord]);
+
+  const [dailyPlan, setDailyPlan] = useState<DailyPlanItem[]>(loadTodayPlan);
+  useEffect(() => { saveTodayPlan(dailyPlan); }, [dailyPlan]);
+
+  const [activeWellnessActivity, setActiveWellnessActivity] = useState<WellnessActivity | null>(null);
+
+  // ── Saved Therapists (Pune District) ────────────────────────────────────────
+  const [savedTherapistIds, setSavedTherapistIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(SAVED_THERAPISTS_KEY);
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch { /* ignore */ }
+    return new Set();
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(SAVED_THERAPISTS_KEY, JSON.stringify([...savedTherapistIds])); } catch { /* ignore */ }
+  }, [savedTherapistIds]);
+
+  const toggleSaveTherapist = (therapistId: string) => {
+    setSavedTherapistIds(prev => {
+      const next = new Set(prev);
+      if (next.has(therapistId)) {
+        next.delete(therapistId);
+        showToast('Removed professional from saved list.');
+      } else {
+        next.add(therapistId);
+        showToast('Saved professional to your private list.');
+      }
+      return next;
+    });
+  };
+
+  const isTherapistSaved = (therapistId: string) => savedTherapistIds.has(therapistId);
+
+  // ── Derived: Personalized Recommendations ──────────────────────────────────
+  const wellnessRecommendations = useMemo(() => {
+    if (!latestEntry) return DEFAULT_RECOMMENDATIONS;
+    return getRecommendedActivities({
+      mood: latestEntry.mood,
+      factors: latestEntry.factors,
+      stressLevel: latestEntry.stressLevel,
+      feedbackRecord,
+    });
+  }, [latestEntry, feedbackRecord]);
+
+  // ── Mood Operations ─────────────────────────────────────────────────────────
+
   const addMoodEntry = (entryData: {
     mood: MoodType;
     factors: string[];
@@ -262,122 +381,195 @@ export const WellnessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     setMoodEntries(prev => {
-      // If previous entries were only sample data, transition to user's real data
       const cleaned = prev.some(e => !e.isSample) ? prev : [];
       return [newEntry, ...cleaned];
     });
-
     setSelectedMood(newEntry.mood);
 
     const moodLabels: Record<MoodType, string> = {
-      'very-low': 'Very Low',
-      'low': 'Low',
-      'okay': 'Okay',
-      'good': 'Good',
-      'great': 'Great'
+      'very-low': 'Very Low', 'low': 'Low', 'okay': 'Okay', 'good': 'Good', 'great': 'Great',
     };
-    const label = moodLabels[entryData.mood];
+    setMoodConfirmedMessage('Check-in complete. Thank you for taking a moment for yourself.');
 
-    // Confirmation message as requested in prompt:
-    // "Check-in complete. Thank you for taking a moment for yourself."
-    setMoodConfirmedMessage("Check-in complete. Thank you for taking a moment for yourself.");
-
-    // Prepend to recent activities
     const newLog: ActivityLog = {
       id: `act-mood-${Date.now()}`,
-      title: `Mood check-in: ${label}`,
+      title: `Mood check-in: ${moodLabels[entryData.mood]}`,
       type: 'mood',
       timestamp: `Today, ${newEntry.time}`,
       badge: 'Recorded in Mood Tracker',
-      detail: `Stress: ${entryData.stressLevel}/5 • Sleep: ${entryData.sleepQuality}${entryData.factors.length > 0 ? ` • ${entryData.factors.join(', ')}` : ''}`
+      detail: `Stress: ${entryData.stressLevel}/5 • Sleep: ${entryData.sleepQuality}${entryData.factors.length > 0 ? ` • ${entryData.factors.join(', ')}` : ''}`,
     };
     setRecentActivities(prev => [newLog, ...prev.slice(0, 6)]);
-
-    showToast("Check-in complete. Thank you for taking a moment for yourself.");
+    showToast('Check-in complete. Thank you for taking a moment for yourself.');
     return newEntry;
   };
 
-  // Update existing mood entry
   const updateMoodEntry = (id: string, updated: Partial<MoodEntry>) => {
-    setMoodEntries(prev =>
-      prev.map(item => (item.id === id ? { ...item, ...updated } : item))
-    );
+    setMoodEntries(prev => prev.map(item => (item.id === id ? { ...item, ...updated } : item)));
     showToast('Mood check-in updated successfully.');
   };
 
-  // Delete a mood entry
   const deleteMoodEntry = (id: string) => {
-    setMoodEntries(prev => {
-      const filtered = prev.filter(item => item.id !== id);
-      return filtered;
-    });
+    setMoodEntries(prev => prev.filter(item => item.id !== id));
     showToast('Check-in removed from your history.');
   };
 
-  // Clear all entries
   const clearAllEntries = () => {
     setMoodEntries([]);
     setSelectedMood(null);
     showToast('Mood check-in history cleared.');
   };
 
-  // Reload initial demonstration entries
   const loadSampleEntries = () => {
     setMoodEntries(initialSampleEntries);
     setSelectedMood('good');
     showToast('Loaded demonstration entries.');
   };
 
-  // Quick select mood from dashboard
   const selectMood = (mood: MoodType) => {
     setSelectedMood(mood);
-    // Add quick mood entry with default baseline stress (2) & sleep ('Good')
-    addMoodEntry({
-      mood,
-      factors: [],
-      stressLevel: 2,
-      sleepQuality: 'Good',
-    });
+    addMoodEntry({ mood, factors: [], stressLevel: 2, sleepQuality: 'Good' });
   };
 
-  const dismissMoodMessage = () => {
-    setMoodConfirmedMessage(null);
-  };
+  const dismissMoodMessage = () => setMoodConfirmedMessage(null);
 
-  const openActivityModal = (activity: Activity) => {
-    setActiveModalActivity(activity);
-  };
+  // ── Legacy Dashboard Activity Modal ─────────────────────────────────────────
 
-  const closeActivityModal = () => {
-    setActiveModalActivity(null);
-  };
+  const openActivityModal = (activity: Activity) => setActiveModalActivity(activity);
+  const closeActivityModal = () => setActiveModalActivity(null);
 
   const completeActivity = (activityId: string) => {
     const act = defaultActivities.find(a => a.id === activityId);
     if (!act) return;
-
     setUserProfile(prev => ({
       ...prev,
-      completedActivitiesToday: Math.min(prev.totalActivitiesGoal, prev.completedActivitiesToday + 1)
+      completedActivitiesToday: Math.min(prev.totalActivitiesGoal, prev.completedActivitiesToday + 1),
     }));
-
-    const now = new Date();
-    const timeStr = `Today, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const timeStr = `Today, ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     const newLog: ActivityLog = {
       id: `act-${Date.now()}`,
       title: act.title,
       type: 'activity',
       timestamp: timeStr,
       badge: `Completed • ${act.duration}`,
-      detail: 'Completed self-care session.'
+      detail: 'Completed self-care session.',
     };
-
     setRecentActivities(prev => [newLog, ...prev.slice(0, 6)]);
     closeActivityModal();
     showToast(`Great job! Completed "${act.title}"`);
   };
 
-  // Calculate metrics
+  // ── Wellness Plan Operations ────────────────────────────────────────────────
+
+  const addToDailyPlan = (activityId: string) => {
+    if (dailyPlan.some(p => p.activityId === activityId)) {
+      showToast('Already in your plan for today.');
+      return;
+    }
+    if (dailyPlan.length >= 3) {
+      showToast('Your daily plan already has 3 activities. Remove one first.');
+      return;
+    }
+    setDailyPlan(prev => [...prev, { activityId, addedAt: new Date().toISOString(), completed: false }]);
+    const act = ALL_ACTIVITIES.find(a => a.id === activityId);
+    showToast(`Added "${act?.title}" to today's plan.`);
+  };
+
+  const removeFromDailyPlan = (activityId: string) => {
+    setDailyPlan(prev => prev.filter(p => p.activityId !== activityId));
+    showToast('Removed from your daily plan.');
+  };
+
+  const markPlanItemComplete = (activityId: string) => {
+    setDailyPlan(prev =>
+      prev.map(p =>
+        p.activityId === activityId
+          ? { ...p, completed: true, completedAt: new Date().toISOString() }
+          : p
+      )
+    );
+    setUserProfile(prev => ({
+      ...prev,
+      completedActivitiesToday: Math.min(prev.totalActivitiesGoal, prev.completedActivitiesToday + 1),
+    }));
+    const act = ALL_ACTIVITIES.find(a => a.id === activityId);
+    showToast(`Well done! "${act?.title}" marked complete.`);
+  };
+
+  const replacePlanItem = (oldId: string, newId: string) => {
+    if (dailyPlan.some(p => p.activityId === newId)) {
+      showToast('That activity is already in your plan.');
+      return;
+    }
+    setDailyPlan(prev =>
+      prev.map(p =>
+        p.activityId === oldId
+          ? { activityId: newId, addedAt: new Date().toISOString(), completed: false }
+          : p
+      )
+    );
+    const act = ALL_ACTIVITIES.find(a => a.id === newId);
+    showToast(`Replaced with "${act?.title}".`);
+  };
+
+  const toggleSaved = (activityId: string) => {
+    setSavedActivityIds(prev => {
+      const next = new Set(prev);
+      if (next.has(activityId)) {
+        next.delete(activityId);
+        showToast('Removed from saved activities.');
+      } else {
+        next.add(activityId);
+        showToast('Saved for later.');
+      }
+      return next;
+    });
+  };
+
+  const recordFeedback = (activityId: string, feedback: ActivityFeedback) => {
+    setFeedbackRecord(prev => ({ ...prev, [activityId]: feedback }));
+    const msgs: Record<ActivityFeedback, string> = {
+      helpful: 'Glad that helped! We\'ll recommend it again.',
+      okay: 'Thanks for the feedback.',
+      'not-for-me': 'Noted — we\'ll suggest different activities.',
+    };
+    showToast(msgs[feedback]);
+  };
+
+  const resetPersonalization = () => {
+    setFeedbackRecord({});
+    try { localStorage.removeItem(FEEDBACK_KEY); } catch { /* ignore */ }
+    showToast('Personalization preferences reset.');
+  };
+
+  const openWellnessActivity = (activity: WellnessActivity) => setActiveWellnessActivity(activity);
+  const closeWellnessActivity = () => setActiveWellnessActivity(null);
+
+  const completeWellnessActivity = (activityId: string) => {
+    const act = ALL_ACTIVITIES.find(a => a.id === activityId);
+    // Mark complete in daily plan if present
+    if (dailyPlan.some(p => p.activityId === activityId && !p.completed)) {
+      markPlanItemComplete(activityId);
+    }
+    setUserProfile(prev => ({
+      ...prev,
+      completedActivitiesToday: Math.min(prev.totalActivitiesGoal + 1, prev.completedActivitiesToday + 1),
+    }));
+    const timeStr = `Today, ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const newLog: ActivityLog = {
+      id: `wact-${Date.now()}`,
+      title: act?.title ?? 'Wellness activity',
+      type: 'activity',
+      timestamp: timeStr,
+      badge: `Completed • ${act?.estimatedDuration ?? ''}`,
+      detail: 'Completed from Wellness Plan.',
+    };
+    setRecentActivities(prev => [newLog, ...prev.slice(0, 6)]);
+    closeWellnessActivity();
+    // Toast will come from feedback flow — don't double-toast here
+  };
+
+  // ── Metrics ─────────────────────────────────────────────────────────────────
   const completedCheckinsCount = activeEntries.length;
   const averageStress = activeEntries.length > 0
     ? Number((activeEntries.reduce((acc, curr) => acc + (curr.stressLevel || 3), 0) / activeEntries.length).toFixed(1))
@@ -407,8 +599,29 @@ export const WellnessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         openActivityModal,
         closeActivityModal,
         completeActivity,
+        // Wellness plan
+        wellnessRecommendations,
+        allWellnessActivities: ALL_ACTIVITIES,
+        dailyPlan,
+        addToDailyPlan,
+        removeFromDailyPlan,
+        markPlanItemComplete,
+        replacePlanItem,
+        savedActivityIds,
+        toggleSaved,
+        feedbackRecord,
+        recordFeedback,
+        resetPersonalization,
+        activeWellnessActivity,
+        openWellnessActivity,
+        closeWellnessActivity,
+        completeWellnessActivity,
+        // Saved therapists (Pune District)
+        savedTherapistIds,
+        toggleSaveTherapist,
+        isTherapistSaved,
         toastMessage,
-        showToast
+        showToast,
       }}
     >
       {children}
@@ -418,8 +631,6 @@ export const WellnessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 export const useWellness = () => {
   const context = useContext(WellnessContext);
-  if (!context) {
-    throw new Error('useWellness must be used within a WellnessProvider');
-  }
+  if (!context) throw new Error('useWellness must be used within a WellnessProvider');
   return context;
 };

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Compass, Lightbulb, Sparkles, AlertCircle } from 'lucide-react';
 import { Card } from '../common/Card';
 import { useWellness } from '../../context/WellnessContext';
@@ -118,6 +119,22 @@ export const EmotionalPatterns: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Suggested Wellness Plan Action */}
+      <div className="p-3.5 rounded-2xl bg-[#E9EFE7]/40 border border-[#D7E2D3] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <Sparkles className="w-4 h-4 text-[#829675] shrink-0" />
+          <p className="text-xs text-[#403B35]">
+            MindBridge crafts personalized daily activities based on your check-in trends.
+          </p>
+        </div>
+        <Link
+          to="/dashboard/wellness-plan"
+          className="text-xs font-semibold text-[#829675] hover:text-[#56664F] whitespace-nowrap hover:underline shrink-0"
+        >
+          View Plan →
+        </Link>
+      </div>
 
       {/* Disclaimer on possible patterns */}
       <div className="pt-2 text-[11px] text-[#77736B] leading-relaxed border-t border-[#F0E8DC]">
