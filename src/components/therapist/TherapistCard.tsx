@@ -17,6 +17,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { PuneTherapist } from '../../types/therapist';
 import { useWellness } from '../../context/WellnessContext';
+import { TherapistAvatar } from './TherapistAvatar';
 
 interface TherapistCardProps {
   therapist: PuneTherapist;
@@ -79,15 +80,30 @@ export const TherapistCard: React.FC<TherapistCardProps> = ({
       className="bg-[#FFFCF6] border-[#E4DACA] shadow-soft-sm hover:shadow-soft-md transition-all duration-200 flex flex-col justify-between relative group"
     >
       <div>
-        {/* Top Meta Header: Type Badge, Consultation Format, Bookmark */}
+        {/* Top Header: Circular Profile Picture, Badges, Name & Bookmark */}
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${getTypeBadgeClass()}`}
-            >
-              {therapist.professionalType}
-            </span>
-            {getFormatBadge()}
+          <div className="flex items-start gap-3.5">
+            {/* Circular Profile Picture */}
+            <TherapistAvatar
+              name={therapist.name}
+              profileImage={therapist.profileImage}
+              size="md"
+            />
+
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${getTypeBadgeClass()}`}
+                >
+                  {therapist.professionalType}
+                </span>
+                {getFormatBadge()}
+              </div>
+
+              <h3 className="text-base font-semibold text-[#403B35] tracking-tight group-hover:text-[#2E2A25] transition-colors leading-snug">
+                {therapist.name}
+              </h3>
+            </div>
           </div>
 
           <button
@@ -108,18 +124,13 @@ export const TherapistCard: React.FC<TherapistCardProps> = ({
           </button>
         </div>
 
-        {/* Name and Credentials */}
-        <div className="mt-3">
-          <h3 className="text-lg font-semibold text-[#403B35] tracking-tight group-hover:text-[#2E2A25] transition-colors">
-            {therapist.name}
-          </h3>
-          <p className="text-xs text-[#77736B] font-medium mt-0.5 line-clamp-1">
-            {therapist.credentials}
-          </p>
-        </div>
+        {/* Credentials */}
+        <p className="text-xs text-[#77736B] font-medium mt-2.5 line-clamp-1">
+          {therapist.credentials}
+        </p>
 
         {/* Clinic & Locality in Pune District */}
-        <div className="mt-3 space-y-1.5 text-xs text-[#5B554D]">
+        <div className="mt-2.5 space-y-1.5 text-xs text-[#5B554D]">
           {therapist.clinicName && (
             <div className="flex items-center gap-1.5 text-[#403B35] font-medium">
               <Building className="w-3.5 h-3.5 text-[#829675] shrink-0" />

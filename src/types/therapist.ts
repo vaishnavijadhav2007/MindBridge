@@ -54,6 +54,7 @@ export interface PuneTherapist {
   phone: string; // Simulated demo contact
   email: string;
   websiteUrl?: string;
+  profileImage?: string; // Optional profile photo or fictional avatar
   bio: string;
   approach: string;
   isDistrictVerified: boolean; // Must be true for Pune district verification

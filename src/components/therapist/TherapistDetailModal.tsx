@@ -21,6 +21,7 @@ import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { PuneTherapist } from '../../types/therapist';
 import { useWellness } from '../../context/WellnessContext';
+import { TherapistAvatar } from './TherapistAvatar';
 
 interface TherapistDetailModalProps {
   therapist: PuneTherapist | null;
@@ -49,33 +50,42 @@ export const TherapistDetailModal: React.FC<TherapistDetailModalProps> = ({
     >
       <div className="space-y-6 text-[#403B35]">
         
-        {/* Top Header Card within Modal */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-[#E4DACA]">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#E9EFE7] text-[#56664F] border border-[#D7E2D3]">
-                {therapist.professionalType}
-              </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FFFCF6] text-[#829675] border border-[#D7E2D3]">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Pune District Verified</span>
-              </span>
-            </div>
+        {/* Top Header Card within Modal with Larger Circular Profile Picture */}
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-5 border-b border-[#E4DACA]">
+          <div className="flex flex-col sm:flex-row items-start gap-4">
+            {/* Larger Circular Profile Picture */}
+            <TherapistAvatar
+              name={therapist.name}
+              profileImage={therapist.profileImage}
+              size="lg"
+            />
 
-            <h2 className="text-xl sm:text-2xl font-semibold text-[#403B35] tracking-tight">
-              {therapist.name}
-            </h2>
-            <p className="text-xs sm:text-sm text-[#77736B] font-medium mt-0.5">
-              {therapist.credentials}
-            </p>
-            {therapist.registrationNumber && (
-              <p className="text-xs text-[#829675] font-mono mt-1">
-                Registration / Council ID: {therapist.registrationNumber}
+            <div>
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#E9EFE7] text-[#56664F] border border-[#D7E2D3]">
+                  {therapist.professionalType}
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FFFCF6] text-[#829675] border border-[#D7E2D3]">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Pune District Verified</span>
+                </span>
+              </div>
+
+              <h2 className="text-xl sm:text-2xl font-semibold text-[#403B35] tracking-tight">
+                {therapist.name}
+              </h2>
+              <p className="text-xs sm:text-sm text-[#77736B] font-medium mt-0.5">
+                {therapist.credentials}
               </p>
-            )}
+              {therapist.registrationNumber && (
+                <p className="text-xs text-[#829675] font-mono mt-1">
+                  Registration / Council ID: {therapist.registrationNumber}
+                </p>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start">
+          <div className="flex items-center gap-2 self-start shrink-0">
             <button
               type="button"
               onClick={() => toggleSaveTherapist(therapist.id)}

@@ -18,6 +18,7 @@ import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { PuneTherapist } from '../../types/therapist';
 import { useWellness } from '../../context/WellnessContext';
+import { TherapistAvatar } from './TherapistAvatar';
 
 interface TherapistContactModalProps {
   therapist: PuneTherapist | null;
@@ -59,20 +60,27 @@ export const TherapistContactModal: React.FC<TherapistContactModalProps> = ({
     <Modal isOpen={isOpen} onClose={handleReset} title="" maxWidth="md">
       <div className="space-y-6 text-[#403B35]">
 
-        {/* Header */}
-        <div className="border-b border-[#E4DACA] pb-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs uppercase font-semibold tracking-wider text-[#829675]">
-              Appointment & Consultation Request
-            </span>
+        {/* Header with Circular Avatar */}
+        <div className="border-b border-[#E4DACA] pb-4 flex items-center gap-3.5">
+          <TherapistAvatar
+            name={therapist.name}
+            profileImage={therapist.profileImage}
+            size="md"
+          />
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs uppercase font-semibold tracking-wider text-[#829675]">
+                Appointment & Consultation Request
+              </span>
+            </div>
+            <h3 className="text-xl font-semibold text-[#403B35]">
+              Contact {therapist.name}
+            </h3>
+            <p className="text-xs text-[#77736B] mt-0.5">
+              {therapist.clinicName ? `${therapist.clinicName} • ` : ''}
+              {therapist.locality}, Pune District
+            </p>
           </div>
-          <h3 className="text-xl font-semibold text-[#403B35]">
-            Contact {therapist.name}
-          </h3>
-          <p className="text-xs text-[#77736B] mt-0.5">
-            {therapist.clinicName ? `${therapist.clinicName} • ` : ''}
-            {therapist.locality}, Pune District
-          </p>
         </div>
 
         {isSubmitted ? (
