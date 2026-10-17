@@ -42,6 +42,8 @@ MindBridge uses Supabase as a secure, privacy-first backend foundation:
 | `saved_therapists` | Bookmarked therapist profiles from Pune district | `auth.uid() = user_id` |
 | `chat_conversations`| AI Companion conversation sessions with explicit consent flags | `auth.uid() = user_id` |
 | `chat_messages` | Consented AI Companion dialogue history | `auth.uid() = user_id` |
+| `screening_assessments` | Standardized self-assessments (PHQ-9, GAD-7, PSS-4, WHO-5) | `auth.uid() = user_id` |
+| `wellness_analysis_reports` | AI-synthesized wellness overview and recommendations | `auth.uid() = user_id` |
 
 ---
 
@@ -110,6 +112,7 @@ MindBridge uses Supabase as a secure, privacy-first backend foundation:
 * `/signup` — Account registration with email verification state
 * `/dashboard` — Protected dashboard overview
 * `/dashboard/mood` — Dedicated Mood Tracker & Mental Wellness Monitor
+* `/dashboard/analysis` — Personalized Wellness Analysis & Validated Screenings (PHQ-9, GAD-7, PSS-4, WHO-5)
 * `/dashboard/companion` — AI Wellness Companion chat & quick actions
 * `/dashboard/wellness-plan` — Daily wellness checklist & bookmarks
 * `/dashboard/therapists` — Certified therapist directory & consultation demo
@@ -134,3 +137,36 @@ MindBridge uses Supabase as a secure, privacy-first backend foundation:
    ```bash
    npm run build
    ```
+
+---
+
+## 🚀 Production Deployment
+
+### Required Environment Variables
+Configure these in your hosting provider (Vercel, Netlify, Cloudflare Pages):
+* `VITE_SUPABASE_URL` — Your Supabase Project URL (`https://xyz.supabase.co`)
+* `VITE_SUPABASE_ANON_KEY` — Your Supabase Anon / Public Key
+
+In **Supabase Dashboard** -> **Project Settings** -> **Edge Functions** -> **Secrets**:
+* `GEMINI_API_KEY` — Google Gemini API key (kept strictly server-side).
+
+### Deploying to Vercel
+1. Import repository on [Vercel](https://vercel.com).
+2. Set Build Command: `npm run build`
+3. Set Output Directory: `dist`
+4. Add Environment Variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+5. Deploy! (Client-side routing is automatically handled via `vercel.json`).
+
+### Deploying to Netlify / Cloudflare Pages
+1. Connect repository.
+2. Build command: `npm run build`
+3. Publish directory: `dist`
+4. SPA routing is automatically supported via `public/_redirects`.
+
+---
+
+## 🆘 Crisis Support Resources (India)
+* **Tele-MANAS (Govt. of India):** Call `14416` or `1800-891-4416` (24/7 Toll-Free, Multilingual)
+* **KIRAN Helpline:** Call `1800-599-0019` (24/7 Toll-Free)
+* **Vandrevala Foundation:** Call `+91 9999 666 555` (24/7 Free Counseling)
+* **National Emergency:** Call `112`
