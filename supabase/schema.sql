@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   daily_goal TEXT NOT NULL DEFAULT 'Mindful 10 mins daily',
   store_journal_consent BOOLEAN NOT NULL DEFAULT true,
   store_chat_consent BOOLEAN NOT NULL DEFAULT false,
+  wellness_analysis_consent BOOLEAN NOT NULL DEFAULT false,
+  consent_updated_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -313,6 +315,76 @@ CREATE POLICY "Users can delete their chat messages"
 
 
 -- ==============================================================================
+-- Table: public.screening_assessments
+-- Validated, non-diagnostic screening self-assessments (PHQ-9, GAD-7, PSS-4, WHO-5)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.screening_assessments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  assessment_type TEXT NOT NULL CHECK (assessment_type IN ('PHQ-9', 'GAD-7', 'PSS-4', 'WHO-5')),
+  score INTEGER NOT NULL,
+  max_score INTEGER NOT NULL,
+  severity TEXT NOT NULL,
+  answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_screening_assessments_user_date 
+  ON public.screening_assessments(user_id, created_at DESC);
+
+-- RLS: public.screening_assessments
+ALTER TABLE public.screening_assessments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own assessments"
+  ON public.screening_assessments FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can record their own assessments"
+  ON public.screening_assessments FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own assessments"
+  ON public.screening_assessments FOR DELETE
+  USING (auth.uid() = user_id);
+
+
+-- ==============================================================================
+-- Table: public.wellness_analysis_reports
+-- AI-synthesized wellness overview and recommendations
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.wellness_analysis_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  summary_text TEXT NOT NULL,
+  key_insights JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recommended_activity_ids TEXT[] NOT NULL DEFAULT '{}',
+  recommended_therapist_specialties TEXT[] NOT NULL DEFAULT '{}',
+  crisis_flag BOOLEAN NOT NULL DEFAULT false,
+  model_source TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wellness_reports_user_date 
+  ON public.wellness_analysis_reports(user_id, created_at DESC);
+
+-- RLS: public.wellness_analysis_reports
+ALTER TABLE public.wellness_analysis_reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own wellness reports"
+  ON public.wellness_analysis_reports FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own wellness reports"
+  ON public.wellness_analysis_reports FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own wellness reports"
+  ON public.wellness_analysis_reports FOR DELETE
+  USING (auth.uid() = user_id);
+
+
+-- ==============================================================================
 -- Function: delete_user_all_data
 -- GDPR / Privacy-first complete account data purge
 -- ==============================================================================
@@ -327,6 +399,8 @@ BEGIN
     RAISE EXCEPTION 'Unauthorized data deletion attempt.';
   END IF;
 
+  DELETE FROM public.wellness_analysis_reports WHERE user_id = target_user_id;
+  DELETE FROM public.screening_assessments WHERE user_id = target_user_id;
   DELETE FROM public.chat_messages WHERE user_id = target_user_id;
   DELETE FROM public.chat_conversations WHERE user_id = target_user_id;
   DELETE FROM public.saved_therapists WHERE user_id = target_user_id;
@@ -339,6 +413,8 @@ BEGIN
   UPDATE public.profiles
   SET streak_days = 1,
       daily_goal = 'Mindful 10 mins daily',
+      wellness_analysis_consent = false,
+      consent_updated_at = NULL,
       updated_at = NOW()
   WHERE id = target_user_id;
 END;

@@ -9,6 +9,7 @@ import { SignupPage } from './pages/SignupPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardOverviewPage } from './pages/dashboard/DashboardOverviewPage';
 import { MoodTrackerPage } from './pages/dashboard/MoodTrackerPage';
+import { WellnessAnalysisPage } from './pages/dashboard/WellnessAnalysisPage';
 import { AICompanionPage } from './pages/dashboard/AICompanionPage';
 import { WellnessPlanPage } from './pages/dashboard/WellnessPlanPage';
 import { TherapistsPage } from './pages/dashboard/TherapistsPage';
@@ -40,6 +41,7 @@ export const App: React.FC = () => {
             >
               <Route index element={<DashboardOverviewPage />} />
               <Route path="mood" element={<MoodTrackerPage />} />
+              <Route path="analysis" element={<WellnessAnalysisPage />} />
               <Route path="companion" element={<AICompanionPage />} />
               <Route path="wellness-plan" element={<WellnessPlanPage />} />
               <Route path="therapists" element={<TherapistsPage />} />

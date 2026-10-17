@@ -13,7 +13,8 @@ import {
   Home, 
   Bell, 
   ChevronRight,
-  Heart
+  Heart,
+  Activity
 } from 'lucide-react';
 import { Logo } from '../common/Logo';
 import { Toast } from '../common/Toast';
@@ -30,6 +31,7 @@ export const DashboardLayout: React.FC = () => {
   const navItems = [
     { to: '/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
     { to: '/dashboard/mood', label: 'Mood Tracker', icon: Smile },
+    { to: '/dashboard/analysis', label: 'Wellness Analysis', icon: Activity },
     { to: '/dashboard/companion', label: 'AI Companion', icon: Sparkles },
     { to: '/dashboard/wellness-plan', label: 'My Wellness Plan', icon: CheckSquare },
     { to: '/dashboard/therapists', label: 'Find a Therapist', icon: UserCheck },

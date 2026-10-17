@@ -48,6 +48,32 @@ export const MoodTrackerPage: React.FC = () => {
         <MoodWellnessOverview />
       </section>
 
+      {/* Screening & AI Analysis Shortcut Banner */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-[#E9EFE7] border border-[#D7E2D3] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-soft-sm">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#56664F]">
+            <Sparkles className="w-3.5 h-3.5 text-[#829675]" />
+            <span>Validated Self-Assessments Available</span>
+          </div>
+          <h3 className="text-base sm:text-lg font-bold text-[#403B35]">
+            Want deeper insights into your mood and anxiety?
+          </h3>
+          <p className="text-xs text-[#687861] leading-relaxed">
+            Take a 2-minute screening (PHQ-9, GAD-7, PSS-4, WHO-5) to receive an AI-synthesized wellness report with coping strategies.
+          </p>
+        </div>
+
+        <Link to="/dashboard/analysis" className="shrink-0">
+          <Button
+            variant="primary"
+            size="sm"
+            className="text-xs shadow-soft-sm whitespace-nowrap"
+          >
+            Explore Wellness Analysis
+          </Button>
+        </Link>
+      </div>
+
       {/* Daily Mood Check-in Form */}
       <section aria-label="Daily Mood Check-in">
         <MoodCheckinForm />

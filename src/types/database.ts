@@ -7,6 +7,8 @@ export interface DbProfile {
   daily_goal: string;
   store_journal_consent: boolean;
   store_chat_consent: boolean;
+  wellness_analysis_consent?: boolean;
+  consent_updated_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -76,5 +78,33 @@ export interface DbChatMessage {
   user_id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  created_at: string;
+}
+
+export interface DbScreeningAssessment {
+  id: string; // UUID
+  user_id: string;
+  assessment_type: 'PHQ-9' | 'GAD-7' | 'PSS-4' | 'WHO-5';
+  score: number;
+  max_score: number;
+  severity: string;
+  answers: Record<string, number>;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface DbWellnessAnalysisReport {
+  id: string; // UUID
+  user_id: string;
+  summary_text: string;
+  key_insights: {
+    category: string;
+    text: string;
+    level?: 'positive' | 'neutral' | 'attention';
+  }[];
+  recommended_activity_ids: string[];
+  recommended_therapist_specialties: string[];
+  crisis_flag: boolean;
+  model_source?: string;
   created_at: string;
 }

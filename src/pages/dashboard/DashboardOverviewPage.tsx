@@ -3,6 +3,7 @@ import { Sparkles, Sun, Heart } from 'lucide-react';
 import { MoodCheckinCard } from '../../components/dashboard/MoodCheckinCard';
 import { MetricSummaryCards } from '../../components/dashboard/MetricSummaryCards';
 import { AICompanionShortcutCard } from '../../components/dashboard/AICompanionShortcutCard';
+import { WellnessAnalysisShortcutCard } from '../../components/dashboard/WellnessAnalysisShortcutCard';
 import { TherapistFinderShortcutCard } from '../../components/dashboard/TherapistFinderShortcutCard';
 import { RecommendedActivities } from '../../components/dashboard/RecommendedActivities';
 import { RecentActivityList } from '../../components/dashboard/RecentActivityList';
@@ -45,6 +46,11 @@ export const DashboardOverviewPage: React.FC = () => {
       {/* THREE SUMMARY CARDS */}
       <section aria-label="Wellness Summary Metrics">
         <MetricSummaryCards />
+      </section>
+
+      {/* PERSONALIZED WELLNESS ANALYSIS SHORTCUT */}
+      <section aria-label="Personalized Wellness Analysis Shortcut">
+        <WellnessAnalysisShortcutCard />
       </section>
 
       {/* AI COMPANION SHORTCUT */}

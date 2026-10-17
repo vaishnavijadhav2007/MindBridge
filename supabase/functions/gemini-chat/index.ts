@@ -78,29 +78,64 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // 3. Parse and validate request body
     const body = await req.json().catch(() => ({}));
-    const message = body.message?.trim();
-    const history = Array.isArray(body.history) ? body.history : [];
+    const action = body.action || 'chat';
 
-    if (!message) {
-      return new Response(
-        JSON.stringify({ error: 'Message cannot be empty.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    let promptContents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+    let systemInstructionText = SYSTEM_PROMPT;
 
-    // 4. Format conversation contents for Gemini API (capped at last 6 messages for context & privacy)
-    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+    if (action === 'wellness-analysis') {
+      systemInstructionText = `You are MindBridge Clinical Wellness AI, a warm, validating, evidence-based mental wellness companion.
+You are generating a personalized, empathetic wellness summary for a user based on their consented emotional check-ins and non-diagnostic screening assessments (e.g. PHQ-9, GAD-7, PSS-4, WHO-5).
 
-    for (const h of history.slice(-6)) {
-      if (h.sender === 'user' && h.text) {
-        contents.push({ role: 'user', parts: [{ text: h.text }] });
-      } else if (h.sender === 'ai' && h.text) {
-        contents.push({ role: 'model', parts: [{ text: h.text }] });
+Key Guidelines:
+1. Warmth & Validation: Greet the user gently, acknowledge their vulnerability, and validate their recent emotional experiences.
+2. Strengths & Resilience: Highlight their strengths, self-care steps, or areas of emotional resilience.
+3. Mind-Body Insights: Thoughtfully connect sleep patterns and stress levels to emotional well-being without making clinical claims.
+4. Actionable Coping Tools: Recommend 2-3 concrete evidence-based exercises (e.g., 4-4-4 Box Breathing, 5-4-3-2-1 Sensory Grounding, or Bedtime Wind-Down).
+5. Non-Diagnostic Disclaimer: Keep the tone educational and supportive. Never diagnose illnesses or prescribe treatments.
+6. Indian Support Resources: If high distress is observed, gently remind them of trusted support like Tele-MANAS (14416) or KIRAN (1800-599-0019).
+7. Brevity: Keep the response to 2-3 warm, clear paragraphs.`;
+
+      const moodInfo = JSON.stringify(body.moodSummary || {});
+      const assessmentsInfo = JSON.stringify(body.assessments || []);
+      const crisisNote = body.crisisRisk ? 'CRISIS CONCERN: User reported elevated distress or self-harm ideation.' : 'Standard self-care check.';
+
+      promptContents = [
+        {
+          role: 'user',
+          parts: [{
+            text: `Please generate my personalized wellness analysis.
+Recent check-in trends: ${moodInfo}
+Screening assessments: ${assessmentsInfo}
+Status note: ${crisisNote}
+
+Provide an empathetic, encouraging 2-3 paragraph wellness synthesis with insights and gentle coping recommendations.`
+          }]
+        }
+      ];
+    } else {
+      const message = body.message?.trim();
+      const history = Array.isArray(body.history) ? body.history : [];
+
+      if (!message) {
+        return new Response(
+          JSON.stringify({ error: 'Message cannot be empty.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-    }
 
-    // Append the current message
-    contents.push({ role: 'user', parts: [{ text: message }] });
+      // Format conversation contents for Gemini API (capped at last 6 messages for context & privacy)
+      for (const h of history.slice(-6)) {
+        if (h.sender === 'user' && h.text) {
+          promptContents.push({ role: 'user', parts: [{ text: h.text }] });
+        } else if (h.sender === 'ai' && h.text) {
+          promptContents.push({ role: 'model', parts: [{ text: h.text }] });
+        }
+      }
+
+      // Append current message
+      promptContents.push({ role: 'user', parts: [{ text: message }] });
+    }
 
     // 5. Query Gemini API (Try gemini-2.0-flash, then gemini-1.5-flash, then gemini-2.5-flash)
     const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
@@ -118,9 +153,9 @@ async function handleRequest(req: Request): Promise<Response> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             systemInstruction: {
-              parts: [{ text: SYSTEM_PROMPT }],
+              parts: [{ text: systemInstructionText }],
             },
-            contents,
+            contents: promptContents,
             generationConfig: {
               temperature: 0.7,
               topP: 0.95,
