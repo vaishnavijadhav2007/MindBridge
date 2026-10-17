@@ -1,25 +1,45 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowLeft, Check, Sparkles, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Mail, Lock, ArrowLeft, Check, Sparkles, AlertCircle, Info, ShieldCheck } from 'lucide-react';
 import { Logo } from '../components/common/Logo';
 import { Input } from '../components/common/Input';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
 import { useWellness } from '../context/WellnessContext';
+import { useAuth } from '../context/AuthContext';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useWellness();
+  const { signIn, resetPassword, user, isConfigured } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Forgot password modal state
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+
+  // Google OAuth setup modal state
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+
+  const from = (location.state as any)?.from?.pathname || '/dashboard';
+
+  // If already authenticated, redirect to dashboard
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
@@ -40,44 +60,90 @@ export const LoginPage: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    // Frontend demo simulation
-    setTimeout(() => {
+
+    if (isConfigured) {
+      const { error } = await signIn(email, password);
       setIsSubmitting(false);
+
+      if (error) {
+        setFormError(error);
+        return;
+      }
+
       showToast('Welcome back! Entering MindBridge dashboard.');
-      navigate('/dashboard');
-    }, 600);
+      navigate(from, { replace: true });
+    } else {
+      // Demo mode fallback
+      setTimeout(() => {
+        setIsSubmitting(false);
+        showToast('Signed in with local demo session.');
+        navigate('/dashboard', { replace: true });
+      }, 500);
+    }
   };
 
-  const handleDemoLogin = () => {
+  const handleDemoLogin = async () => {
     setEmail('sarah.chen@example.com');
     setPassword('mindful123');
     setErrors({});
+    setFormError(null);
     setIsSubmitting(true);
-    setTimeout(() => {
+
+    if (isConfigured) {
+      // Try signing in demo account or sign up demo account if needed
+      const { error } = await signIn('sarah.chen@example.com', 'mindful123');
       setIsSubmitting(false);
-      showToast('Signed in with Demo Account!');
-      navigate('/dashboard');
-    }, 400);
+      if (error) {
+        setFormError(error);
+        return;
+      }
+      showToast('Welcome back, Sarah!');
+      navigate(from, { replace: true });
+    } else {
+      setTimeout(() => {
+        setIsSubmitting(false);
+        showToast('Signed in with Demo Account!');
+        navigate('/dashboard', { replace: true });
+      }, 400);
+    }
   };
 
-  const handleGoogleDemo = () => {
-    showToast('Signed in via Google (Demo)');
-    navigate('/dashboard');
+  const handleGoogleClick = () => {
+    setShowGoogleModal(true);
   };
 
-  const handleForgotSubmit = (e: React.FormEvent) => {
+  const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setForgotError(null);
+
     if (!forgotEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail)) {
-      showToast('Please enter a valid email address.');
+      setForgotError('Please enter a valid email address.');
       return;
     }
-    setForgotSubmitted(true);
+
+    setForgotLoading(true);
+
+    if (isConfigured) {
+      const { error } = await resetPassword(forgotEmail);
+      setForgotLoading(false);
+      if (error) {
+        setForgotError(error);
+        return;
+      }
+      setForgotSubmitted(true);
+    } else {
+      setTimeout(() => {
+        setForgotLoading(false);
+        setForgotSubmitted(true);
+      }, 400);
+    }
   };
 
   return (
@@ -91,15 +157,30 @@ export const LoginPage: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Landing Page</span>
         </Link>
-        <span className="text-xs bg-[#E9EFE7] text-[#56664F] px-2.5 py-1 rounded-full font-medium border border-[#D7E2D3]">
-          Frontend Demo Mode
+        <span
+          className={`text-xs px-2.5 py-1 rounded-full font-medium border flex items-center gap-1.5 ${
+            isConfigured
+              ? 'bg-[#E9EFE7] text-[#56664F] border-[#D7E2D3]'
+              : 'bg-[#FAF3E7] text-[#8C6D4F] border-[#E8DBCA]'
+          }`}
+        >
+          {isConfigured ? (
+            <>
+              <ShieldCheck className="w-3.5 h-3.5 text-[#829675]" />
+              <span>Supabase Auth</span>
+            </>
+          ) : (
+            <>
+              <Info className="w-3.5 h-3.5 text-[#C59B7E]" />
+              <span>Demo Mode</span>
+            </>
+          )}
         </span>
       </div>
 
       {/* Main Login Card */}
       <div className="max-w-md w-full mx-auto my-auto py-6">
         <Card padding="lg" className="shadow-soft-md border-[#E4DACA] bg-[#FFFCF6]">
-          
           {/* Logo & Headings */}
           <div className="text-center space-y-3 mb-8">
             <div className="flex justify-center">
@@ -116,24 +197,31 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Demo Quick-Fill Bar */}
+          {/* Friendly Auth Error Alert */}
+          {formError && (
+            <div className="mb-5 p-3.5 rounded-xl bg-[#FEF0F0] border border-[#EDBBBB] text-xs text-[#C0392B] flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">{formError}</p>
+            </div>
+          )}
+
+          {/* Quick Test Demo Bar */}
           <div className="mb-6 bg-[#F3EBDD] border border-[#E4DACA] rounded-xl p-3 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 text-[#403B35]">
               <Sparkles className="w-4 h-4 text-[#829675]" />
-              <span>Want a quick test?</span>
+              <span>Quick test account?</span>
             </div>
             <button
               type="button"
               onClick={handleDemoLogin}
               className="text-[#829675] font-semibold hover:underline"
             >
-              1-Click Demo Login
+              Fill Demo Credentials
             </button>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            
             <Input
               label="Email address"
               type="email"
@@ -142,6 +230,7 @@ export const LoginPage: React.FC = () => {
               onChange={(e) => {
                 setEmail(e.target.value);
                 if (errors.email) setErrors({ ...errors, email: undefined });
+                if (formError) setFormError(null);
               }}
               error={errors.email}
               leftIcon={<Mail className="w-4 h-4" />}
@@ -156,6 +245,7 @@ export const LoginPage: React.FC = () => {
               onChange={(e) => {
                 setPassword(e.target.value);
                 if (errors.password) setErrors({ ...errors, password: undefined });
+                if (formError) setFormError(null);
               }}
               error={errors.password}
               leftIcon={<Lock className="w-4 h-4" />}
@@ -178,6 +268,8 @@ export const LoginPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setForgotSubmitted(false);
+                  setForgotError(null);
+                  setForgotEmail(email);
                   setShowForgotModal(true);
                 }}
                 className="text-[#829675] hover:underline font-medium focus:outline-none"
@@ -214,7 +306,7 @@ export const LoginPage: React.FC = () => {
           {/* Google Button */}
           <button
             type="button"
-            onClick={handleGoogleDemo}
+            onClick={handleGoogleClick}
             className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-[#E4DACA] rounded-xl text-sm font-medium text-[#403B35] bg-[#FFFCF6] hover:bg-[#F3EBDD]/50 transition-colors shadow-soft-sm"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -251,13 +343,12 @@ export const LoginPage: React.FC = () => {
               Return to MindBridge Homepage
             </Link>
           </div>
-
         </Card>
       </div>
 
       {/* Footer Note */}
       <div className="text-center text-xs text-[#77736B] pb-2">
-        MindBridge — Frontend Demonstration • Safe and Private
+        MindBridge — Mental Wellness Companion • Secure & Private
       </div>
 
       {/* Forgot Password Modal */}
@@ -273,8 +364,8 @@ export const LoginPage: React.FC = () => {
               <Check className="w-6 h-6" />
             </div>
             <h4 className="text-base font-semibold text-[#403B35]">Reset instructions sent!</h4>
-            <p className="text-sm text-[#77736B]">
-              In this frontend demo, a reset email has been simulated for <strong className="text-[#403B35]">{forgotEmail}</strong>.
+            <p className="text-sm text-[#77736B] leading-relaxed">
+              If an account exists for <strong className="text-[#403B35]">{forgotEmail}</strong>, you will receive an email shortly with instructions to reset your password.
             </p>
             <Button
               variant="primary"
@@ -286,6 +377,11 @@ export const LoginPage: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={handleForgotSubmit} className="space-y-4">
+            {forgotError && (
+              <div className="p-3 rounded-xl bg-[#FEF0F0] border border-[#EDBBBB] text-xs text-[#C0392B]">
+                {forgotError}
+              </div>
+            )}
             <Input
               label="Account email"
               type="email"
@@ -298,12 +394,48 @@ export const LoginPage: React.FC = () => {
               <Button variant="ghost" type="button" onClick={() => setShowForgotModal(false)}>
                 Cancel
               </Button>
-              <Button variant="primary" type="submit">
+              <Button variant="primary" type="submit" isLoading={forgotLoading}>
                 Send Reset Link
               </Button>
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* Google Auth Configuration Requirement Modal */}
+      <Modal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        title="Google Authentication Setup"
+        subtitle="Provider configuration requirement"
+      >
+        <div className="space-y-4 text-xs text-[#403B35]">
+          <div className="p-3.5 rounded-xl bg-[#FAF6EE] border border-[#E4DACA] space-y-2">
+            <div className="flex items-center gap-2 font-semibold text-sm text-[#403B35]">
+              <Info className="w-4 h-4 text-[#829675]" />
+              <span>Google OAuth Configuration Required</span>
+            </div>
+            <p className="text-[#77736B] leading-relaxed">
+              To enable real Google Single Sign-On for your MindBridge installation, follow these steps in your Supabase project:
+            </p>
+            <ol className="list-decimal pl-4 space-y-1 text-[#5B554D]">
+              <li>Create OAuth 2.0 Credentials in Google Cloud Console.</li>
+              <li>Add your Supabase redirect URI (<code>https://&lt;project-id&gt;.supabase.co/auth/v1/callback</code>).</li>
+              <li>In Supabase Dashboard, go to <strong>Authentication → Providers → Google</strong>.</li>
+              <li>Paste your Google Client ID and Client Secret and enable the toggle.</li>
+            </ol>
+          </div>
+
+          <p className="text-[#77736B]">
+            In the meantime, you can sign in with your email and password or use the 1-Click Demo account above.
+          </p>
+
+          <div className="flex justify-end pt-2">
+            <Button variant="primary" size="sm" onClick={() => setShowGoogleModal(false)}>
+              Understood
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -20,13 +20,23 @@ import { GroundingExerciseModal } from '../../components/companion/GroundingExer
 import { JournalPromptModal } from '../../components/companion/JournalPromptModal';
 import { CrisisSupportPanel } from '../../components/companion/CrisisSupportPanel';
 import { ClearChatModal } from '../../components/companion/ClearChatModal';
-import { generateCompanionReply } from '../../services/aiMockService';
+import { sendCompanionMessage } from '../../services/geminiChatService';
 import { useWellness } from '../../context/WellnessContext';
+import { useAuth } from '../../context/AuthContext';
+import { 
+  createConversationRecord, 
+  saveChatMessageRecord, 
+  fetchUserConversations, 
+  fetchConversationMessages, 
+  deleteUserConversation 
+} from '../../services/chatHistoryService';
+import { ShieldCheck, Lock } from 'lucide-react';
 
 const WELCOME_TEXT = "Hi! I'm your MindBridge companion. You can talk to me about stress, studies, sleep, emotions, or anything affecting your well-being. What would you like to explore today?";
 
 export const AICompanionPage: React.FC = () => {
   const { showToast } = useWellness();
+  const { user, profile, updateProfile, isConfigured } = useAuth();
 
   // Initial welcome message
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -42,6 +52,40 @@ export const AICompanionPage: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [showCrisisPanel, setShowCrisisPanel] = useState<boolean>(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState<boolean>(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [isChatConsentEnabled, setIsChatConsentEnabled] = useState<boolean>(profile?.store_chat_consent ?? false);
+
+  // Synchronize consent state when profile loads
+  useEffect(() => {
+    if (profile?.store_chat_consent !== undefined) {
+      setIsChatConsentEnabled(profile.store_chat_consent);
+    }
+  }, [profile?.store_chat_consent]);
+
+  // Load existing conversation if consent is enabled and user is logged in
+  useEffect(() => {
+    let isMounted = true;
+    async function loadRecentChat() {
+      if (!user?.id || !profile?.store_chat_consent || !isConfigured) return;
+      try {
+        const { data: convs } = await fetchUserConversations(user.id);
+        if (convs && convs.length > 0 && isMounted) {
+          const latest = convs[0];
+          setActiveConversationId(latest.id);
+          const { data: history } = await fetchConversationMessages(latest.id);
+          if (history && history.length > 0 && isMounted) {
+            setMessages(history);
+          }
+        }
+      } catch {
+        // Fall back gracefully to fresh conversation state
+      }
+    }
+    loadRecentChat();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, profile?.store_chat_consent, isConfigured]);
 
   // Modals for Quick Actions
   const [activeModal, setActiveModal] = useState<'breathing' | 'grounding' | 'journal' | null>(null);
@@ -58,8 +102,22 @@ export const AICompanionPage: React.FC = () => {
     scrollToBottom();
   }, [messages, isGenerating]);
 
+  // Toggle user chat consent
+  const handleToggleConsent = async () => {
+    const nextVal = !isChatConsentEnabled;
+    setIsChatConsentEnabled(nextVal);
+    if (user) {
+      await updateProfile({ store_chat_consent: nextVal });
+    }
+    showToast(
+      nextVal
+        ? 'Private chat saving enabled under your account.'
+        : 'Ephemeral mode enabled (messages will not be saved).'
+    );
+  };
+
   // Handle message submission
-  const handleSendMessage = (messageText?: string) => {
+  const handleSendMessage = async (messageText?: string) => {
     const textToSend = (messageText || inputText).trim();
     if (!textToSend || isGenerating) return;
 
@@ -77,9 +135,32 @@ export const AICompanionPage: React.FC = () => {
     setInputText('');
     setIsGenerating(true);
 
-    // Simulate gentle, empathetic AI response delay (750ms - 1000ms)
-    setTimeout(() => {
-      const companionResult = generateCompanionReply(textToSend);
+    // If chat consent is enabled, save conversation and message to Supabase
+    let currentConvId = activeConversationId;
+    if (user?.id && isChatConsentEnabled && isConfigured) {
+      try {
+        if (!currentConvId) {
+          const { data: createdConv } = await createConversationRecord(
+            user.id,
+            textToSend.slice(0, 45) || 'Wellness Reflection',
+            true
+          );
+          if (createdConv) {
+            currentConvId = createdConv.id;
+            setActiveConversationId(createdConv.id);
+          }
+        }
+        if (currentConvId) {
+          await saveChatMessageRecord(currentConvId, user.id, 'user', textToSend);
+        }
+      } catch {
+        // Continue smoothly even if background sync fails
+      }
+    }
+
+    try {
+      // Call secure Gemini Edge Function via Supabase client
+      const companionResult = await sendCompanionMessage(textToSend, messages, Boolean(user));
 
       const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
@@ -88,19 +169,106 @@ export const AICompanionPage: React.FC = () => {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedAction: companionResult.suggestedAction,
         isCrisis: companionResult.isCrisis,
+        isError: companionResult.isFallback && !!companionResult.error,
+        errorMessage: companionResult.error,
+        retryText: companionResult.isFallback && !!companionResult.error ? textToSend : undefined,
+        modelBadge: companionResult.isFallback
+          ? (companionResult.error ? 'Fallback Mode' : 'Local Mode')
+          : (companionResult.model || 'Gemini 2.5 Flash'),
       };
 
       setMessages((prev) => [...prev, aiMsg]);
-      setIsGenerating(false);
 
       if (companionResult.isCrisis) {
         setShowCrisisPanel(true);
       }
-    }, 850);
+
+      // Persist AI response if conversation is active
+      if (user?.id && isChatConsentEnabled && isConfigured && currentConvId) {
+        try {
+          await saveChatMessageRecord(currentConvId, user.id, 'assistant', companionResult.reply);
+        } catch {
+          // Keep resilient
+        }
+      }
+    } catch (err: any) {
+      const errorMsg: ChatMessage = {
+        id: `ai-err-${Date.now()}`,
+        sender: 'ai',
+        text: "I'm having a little trouble connecting right now. Please take a gentle breath, and we can try again in a moment.",
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isError: true,
+        errorMessage: err.message || 'Network error.',
+        retryText: textToSend,
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Handle retrying a failed message without duplicating the user's message
+  const handleRetryMessage = async (failedText: string, failedMessageId?: string) => {
+    if (!failedText || isGenerating) return;
+
+    // Filter out the failed message from UI so the user does not see stacked error cards
+    const cleanedMessages = failedMessageId
+      ? messages.filter((m) => m.id !== failedMessageId)
+      : messages;
+
+    setMessages(cleanedMessages);
+    setIsGenerating(true);
+
+    try {
+      const companionResult = await sendCompanionMessage(failedText, cleanedMessages, Boolean(user));
+
+      const aiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        text: companionResult.reply,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedAction: companionResult.suggestedAction,
+        isCrisis: companionResult.isCrisis,
+        isError: companionResult.isFallback && !!companionResult.error,
+        errorMessage: companionResult.error,
+        retryText: companionResult.isFallback && !!companionResult.error ? failedText : undefined,
+        modelBadge: companionResult.isFallback
+          ? (companionResult.error ? 'Fallback Mode' : 'Local Mode')
+          : (companionResult.model || 'Gemini 2.5 Flash'),
+      };
+
+      setMessages((prev) => [...prev, aiMsg]);
+
+      if (companionResult.isCrisis) {
+        setShowCrisisPanel(true);
+      }
+
+      if (user?.id && isChatConsentEnabled && isConfigured && activeConversationId) {
+        try {
+          await saveChatMessageRecord(activeConversationId, user.id, 'assistant', companionResult.reply);
+        } catch {
+          // Keep resilient
+        }
+      }
+    } catch (err: any) {
+      const errorMsg: ChatMessage = {
+        id: `ai-err-${Date.now()}`,
+        sender: 'ai',
+        text: "I'm having a little trouble connecting right now. Please take a gentle breath, and we can try again in a moment.",
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isError: true,
+        errorMessage: err.message || 'Network error.',
+        retryText: failedText,
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Start fresh chat
   const handleStartNewChat = () => {
+    setActiveConversationId(null);
     setMessages([
       {
         id: `welcome-${Date.now()}`,
@@ -115,7 +283,15 @@ export const AICompanionPage: React.FC = () => {
   };
 
   // Clear chat completely
-  const handleConfirmClearChat = () => {
+  const handleConfirmClearChat = async () => {
+    if (user?.id && activeConversationId && isConfigured) {
+      try {
+        await deleteUserConversation(user.id, activeConversationId);
+      } catch {
+        // Graceful fallback
+      }
+    }
+    setActiveConversationId(null);
     setMessages([
       {
         id: `welcome-${Date.now()}`,
@@ -148,12 +324,34 @@ export const AICompanionPage: React.FC = () => {
             padding="none"
             className="flex flex-col h-[600px] border-[#E4DACA] bg-[#FFFCF6] shadow-soft-sm overflow-hidden"
           >
-            {/* Chat Top Subheader with Controls */}
-            <div className="p-3.5 px-5 bg-[#FAF6EE] border-b border-[#E4DACA] flex items-center justify-between gap-3">
+            {/* Chat Top Subheader with Controls & Privacy Mode */}
+            <div className="p-3.5 px-4 sm:px-5 bg-[#FAF6EE] border-b border-[#E4DACA] flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#829675] animate-pulse" />
                 <span className="text-xs font-semibold text-[#403B35]">Active Session</span>
-                <span className="text-[11px] text-[#A39D93]">• Local State</span>
+                
+                {/* Privacy Consent Mode Pill */}
+                <button
+                  type="button"
+                  onClick={handleToggleConsent}
+                  className={`ml-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border flex items-center gap-1 transition-all ${
+                    isChatConsentEnabled
+                      ? 'bg-[#E9EFE7] border-[#829675] text-[#42523D] hover:bg-[#dfe9dc]'
+                      : 'bg-[#F3EBDD]/80 border-[#E4DACA] text-[#77736B] hover:text-[#403B35]'
+                  }`}
+                  title={
+                    isChatConsentEnabled
+                      ? 'Private storage is active. Click to switch to ephemeral mode.'
+                      : 'Ephemeral mode. Click to enable encrypted cloud history with your consent.'
+                  }
+                >
+                  {isChatConsentEnabled ? (
+                    <ShieldCheck className="w-3 h-3 text-[#829675]" />
+                  ) : (
+                    <Lock className="w-3 h-3 text-[#77736B]" />
+                  )}
+                  <span>{isChatConsentEnabled ? 'Saved Privately' : 'Ephemeral Mode'}</span>
+                </button>
               </div>
 
               <div className="flex items-center gap-2">
@@ -186,6 +384,7 @@ export const AICompanionPage: React.FC = () => {
                   key={msg.id}
                   message={msg}
                   onTriggerAction={(action) => setActiveModal(action)}
+                  onRetry={(retryText, messageId) => handleRetryMessage(retryText, messageId)}
                 />
               ))}
 

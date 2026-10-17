@@ -18,10 +18,12 @@ import {
 import { Logo } from '../common/Logo';
 import { Toast } from '../common/Toast';
 import { useWellness } from '../../context/WellnessContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const DashboardLayout: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const { userProfile, showToast } = useWellness();
+  const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,8 +36,9 @@ export const DashboardLayout: React.FC = () => {
     { to: '/dashboard/settings', label: 'Settings', icon: Settings },
   ];
 
-  const handleLogout = () => {
-    showToast('Signed out of demo session.');
+  const handleLogout = async () => {
+    await signOut();
+    showToast('Signed out securely.');
     navigate('/');
   };
 

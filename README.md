@@ -1,6 +1,6 @@
-# MindBridge — Your Mental Wellness Companion
+# MindBridge — Your AI Mental Wellness Companion
 
-MindBridge is a clean, modern, minimal, and calming mental wellness frontend web application built with **React**, **TypeScript**, **Tailwind CSS**, and **Lucide Icons**.
+MindBridge is a clean, modern, minimal, and calming mental wellness web application built with **React**, **TypeScript**, **Tailwind CSS**, **Lucide Icons**, and backed by **Supabase (PostgreSQL, Supabase Auth, Row Level Security)**.
 
 ---
 
@@ -12,87 +12,112 @@ MindBridge is a clean, modern, minimal, and calming mental wellness frontend web
 * **Main Text:** Dark Brown (`#403B35`)
 * **Secondary Text:** Muted Gray (`#77736B`)
 * **Borders:** Light Beige (`#E4DACA`)
-* **Typography:** Clean font pairing with Google Fonts (`Poppins` and `Inter`)
+* **Typography:** Clean font pairing (`Poppins` and `Inter`)
 * **Visual Aesthetic:** Rounded cards (`rounded-2xl`, `rounded-3xl`), generous whitespace, soft shadows, and calm micro-interactions.
 
 ---
 
-## 🤖 Step 3: AI Wellness Companion Frontend
+## 🗄️ Backend Architecture & Supabase Foundation
 
-### 1. Dedicated AI Companion Page (`/dashboard/companion`)
-* **Header & Disclaimer:**
-  * Heading: *"A Safe Space to Talk"*
-  * Subtitle: *"Share what's on your mind. Let's explore it together."*
-  * Status label: *"Mental Wellness Companion"* with gentle pulse indicator.
-  * Direct *"Return to Dashboard"* navigation button.
-  * Clear, compassionate disclaimer:
-    > *"I'm an AI wellness companion, not a therapist or a medical professional. I can offer general information and coping strategies, but I cannot diagnose mental health conditions."*
-* **Chat Interface:**
-  * Welcome message from MindBridge companion:
-    > *"Hi! I'm your MindBridge companion. You can talk to me about stress, studies, sleep, emotions, or anything affecting your well-being. What would you like to explore today?"*
-  * Scrollable conversation area with distinct message styling for user and AI.
-  * Typing indicator with animated dots (*"MindBridge is reflecting..."*).
-  * Timestamps on every message.
-  * Bottom input bar with auto-resizing, enter-to-send support, and disabled state while responses generate.
-  * Top session controls: *"New Chat"* and *"Clear Chat"* (with modal confirmation).
-* **Suggested Questions:**
-  * *"I'm feeling stressed about my studies."*
-  * *"How can I manage anxiety?"*
-  * *"I've been having trouble sleeping."*
-  * *"I feel overwhelmed and don't know where to start."*
-  * *"How can I build a healthier daily routine?"*
-* **Empathetic Mock Response Engine:**
-  * Intelligent recognition of common wellness topics:
-    * Academic stress & study deadlines
-    * Anxiety, worry, and panic
-    * Sleep difficulties & bedtime racing thoughts
-    * Low mood & feeling down
-    * Motivation & procrastination
-    * Relaxation & grounding
-    * General daily wellness routines
-    * Safety & crisis awareness
-* **"Try This" Quick Actions:**
-  * **Guided Breathing:** Interactive visual breathing timer with expanding/contracting circle (4-4-4 box breathing) and stop/pause controls.
-  * **Grounding Exercise:** Interactive 5-4-3-2-1 sensory awareness activity with step-by-step guidance.
-  * **Journal Prompt:** Interactive reflection prompt *"What is one thing that has been on your mind today?"* with private writing area.
-* **Mental Health Safety & Crisis Support:**
-  * Supportive crisis help panel featuring verified 24/7 contacts:
-    * **988 Suicide & Crisis Lifeline** (Call/Text 988)
-    * **Crisis Text Line** (Text HOME to 741741)
-    * **The Trevor Project** (1-866-488-7386 or text START to 678-678)
-    * **International Helplines** (findahelpline.com)
-* **Dashboard Integration:**
-  * Shortcut card on the Dashboard Overview (`/dashboard`) for quick 1-click access to the AI Companion and common conversation starters.
+MindBridge uses Supabase as a secure, privacy-first backend foundation:
+
+* **Authentication:** Supabase Auth (Email/Password registration, verification handling, login, session tokens, secure password reset, protected client routes).
+* **Database:** PostgreSQL on Supabase with strict **Row Level Security (RLS)** ensuring users can only read and mutate their own records (`auth.uid() = user_id`).
+* **Privacy & Consent First:** 
+  * Explicit toggles for storing free-form journal notes and AI Companion conversation history.
+  * Ephemeral modes when consent is not provided.
+  * One-click JSON data export and GDPR-compliant irreversible account data purge (`delete_user_all_data` RPC).
+* **Resilient Offline / Demo Mode:**
+  * When `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are not configured in `.env`, MindBridge automatically runs in local demo mode using localStorage with zero crashes or broken UI.
+
+### Database Tables Schema (`supabase/schema.sql`)
+
+| Table Name | Description | RLS Policy |
+| :--- | :--- | :--- |
+| `profiles` | User profile, preferred language (English, Marathi, Hindi, Telugu), streaks, and privacy consent preferences | `auth.uid() = id` |
+| `mood_checkins` | Daily mood logs (mood, stress level 1-5, sleep quality, contributing factors, optional journal note) | `auth.uid() = user_id` |
+| `wellness_plans` | Personalized daily wellness habit plan records | `auth.uid() = user_id` |
+| `saved_activities` | User-favorited mindfulness & wellness activities | `auth.uid() = user_id` |
+| `activity_feedback` | Rating & reflections on completed exercises | `auth.uid() = user_id` |
+| `saved_therapists` | Bookmarked therapist profiles from Pune district | `auth.uid() = user_id` |
+| `chat_conversations`| AI Companion conversation sessions with explicit consent flags | `auth.uid() = user_id` |
+| `chat_messages` | Consented AI Companion dialogue history | `auth.uid() = user_id` |
 
 ---
 
-## 🌿 Step 2: Mood Tracker & Mental Wellness Monitor
+## 🚀 Supabase Setup Guide
 
-* Dedicated page at `/dashboard/mood`.
-* Daily Mood Check-in with 5 moods, contributing factors, 1–5 stress scale, sleep quality, and journal note.
-* `localStorage` persistence with transparent privacy notices.
-* Mental Wellness Overview with recent mood, average stress, and check-ins completed.
-* Visual SVG mood trajectory chart with 7-day and 30-day filters.
-* Recorded check-in history list with Edit and Delete functionality.
-* Rule-based emotional pattern observations without AI overcomplication.
+### 1. Create a Supabase Project
+1. Visit [supabase.com](https://supabase.com) and create an account or sign in.
+2. Click **New project**, choose an organization, project name (e.g. `mindbridge-db`), and database password.
+3. Select your closest region (e.g., `ap-south-1` Mumbai for India).
+
+### 2. Apply Database Schema & Policies
+1. In the Supabase project dashboard, navigate to the **SQL Editor** on the left menu.
+2. Open the file [`supabase/schema.sql`](supabase/schema.sql) from this repository.
+3. Paste the entire SQL script into the SQL Editor and click **Run**.
+4. This will create all tables, indexes, Row Level Security policies, and the user trigger.
+
+### 3. Configure Environment Variables
+1. In Supabase, go to **Project Settings** -> **API**.
+2. Copy the **Project URL** and the **anon / public** key.
+3. In your project root, create or update `.env` (refer to `.env.example`):
+   ```env
+   VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+   VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ```
+4. *Important Security Note:* Only the public `anon` key is exposed in the frontend. Never expose the `service_role` secret key.
+
+---
+
+## 🤖 Feature Highlights
+
+### 1. Dedicated AI Wellness Companion (`/dashboard/companion`)
+* Safe, non-judgmental space with empathetic reflections.
+* Privacy-first mode: toggle between Ephemeral Mode and Encrypted Saved History.
+* Quick action toolkits:
+  * **Guided Breathing:** 4-4-4 box breathing visual rhythm.
+  * **Grounding Exercise:** 5-4-3-2-1 sensory awareness.
+  * **Journal Prompt:** Private reflective writing space.
+* Immediate crisis resources banner with direct access to certified helplines.
+
+### 2. Mood Tracker & Mental Wellness Monitor (`/dashboard/mood`)
+* Daily check-in tracking emotion, stress score, sleep quality, and contributing factors.
+* Trajectory chart with 7-day and 30-day views.
+* Synced directly with Supabase `mood_checkins` when authenticated.
+
+### 3. My Wellness Plan (`/dashboard/wellness-plan`)
+* Personalized daily mindfulness checklist with progress bar.
+* Activity bookmarks and feedback reflection logging.
+
+### 4. Find a Therapist (`/dashboard/therapists`)
+* Verified directory covering Pune district (Shivajinagar, Kothrud, Deccan, Viman Nagar, Hinjewadi, Camp, Baner, Wakad, Pimpri).
+* Multilingual support for English, Marathi (मराठी), Hindi (हिंदी), and Telugu (తెలుగు).
+* Real-time bookmarking synced to database.
+
+### 5. Settings & Privacy Dashboard (`/dashboard/settings`)
+* Profile name and language preferences.
+* Granular storage consent toggles for journal reflections and chat logs.
+* One-click JSON data export.
+* GDPR-compliant permanent account data purge.
 
 ---
 
 ## 🧭 Site Navigation Routes
 
 * `/` — Landing Page (Hero, Features, About, Footer)
-* `/login` — Member Sign In with validation & 1-Click Demo Login
-* `/signup` — Account Registration
-* `/dashboard` — Main Dashboard Overview (with AI Companion shortcut)
+* `/login` — Member Sign In, password reset modal, Google setup instructions, 1-Click demo access
+* `/signup` — Account registration with email verification state
+* `/dashboard` — Protected dashboard overview
 * `/dashboard/mood` — Dedicated Mood Tracker & Mental Wellness Monitor
 * `/dashboard/companion` — AI Wellness Companion chat & quick actions
-* `/dashboard/wellness-plan` — Daily habit checklist
+* `/dashboard/wellness-plan` — Daily wellness checklist & bookmarks
 * `/dashboard/therapists` — Certified therapist directory & consultation demo
-* `/dashboard/settings` — Profile, mindful reminders, and privacy controls
+* `/dashboard/settings` — Profile, mindful reminders, and data controls
 
 ---
 
-## 🚀 Running Locally
+## 💻 Running Locally
 
 1. Install dependencies:
    ```bash
@@ -103,9 +128,9 @@ MindBridge is a clean, modern, minimal, and calming mental wellness frontend web
    ```bash
    npm run dev
    ```
-   Open [http://localhost:3000](http://localhost:3000) or [http://127.0.0.1:3000/dashboard/companion](http://127.0.0.1:3000/dashboard/companion).
+   Open [http://localhost:3000](http://localhost:3000).
 
-3. Build production bundle:
+3. Type-check and build production bundle:
    ```bash
    npm run build
    ```

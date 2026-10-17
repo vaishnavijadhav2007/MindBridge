@@ -1,5 +1,5 @@
 import React from 'react';
-import { Feather, User, Wind, Compass, PenTool } from 'lucide-react';
+import { Feather, User, Wind, Compass, PenTool, AlertCircle, RotateCcw, Sparkles } from 'lucide-react';
 
 export interface ChatMessage {
   id: string;
@@ -8,16 +8,22 @@ export interface ChatMessage {
   time: string;
   suggestedAction?: 'breathing' | 'grounding' | 'journal';
   isCrisis?: boolean;
+  isError?: boolean;
+  errorMessage?: string;
+  modelBadge?: string;
+  retryText?: string;
 }
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
   onTriggerAction?: (action: 'breathing' | 'grounding' | 'journal') => void;
+  onRetry?: (text: string, messageId?: string) => void;
 }
 
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   message,
   onTriggerAction,
+  onRetry,
 }) => {
   const isUser = message.sender === 'user';
 
@@ -111,14 +117,43 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </div>
         )}
 
-        {/* Timestamp */}
+        {/* Error Alert with Retry Button */}
+        {!isUser && message.isError && (
+          <div className="mt-3 p-2.5 rounded-xl bg-[#FEF0F0] border border-[#EDBBBB] text-xs text-[#C0392B] space-y-2">
+            <div className="flex items-start gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">{message.errorMessage || 'Connection issue with the AI engine.'}</p>
+            </div>
+            {message.retryText && onRetry && (
+              <button
+                type="button"
+                onClick={() => onRetry(message.retryText!, message.id)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#EDBBBB] text-[#C0392B] hover:bg-red-50 transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Retry Message</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Timestamp & Metadata Footer */}
         <div
-          className={`text-[10px] mt-2 flex items-center gap-1 ${
+          className={`text-[10px] mt-2 flex items-center justify-between gap-2 ${
             isUser ? 'text-[#FFFCF6]/80 justify-end' : 'text-[#A39D93]'
           }`}
         >
-          <span>{message.time}</span>
-          {!isUser && <span>• MindBridge Companion</span>}
+          <div className="flex items-center gap-1.5">
+            <span>{message.time}</span>
+            {!isUser && <span>• MindBridge Companion</span>}
+          </div>
+
+          {!isUser && message.modelBadge && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-[#E9EFE7] text-[#56664F] border border-[#D7E2D3]">
+              <Sparkles className="w-2.5 h-2.5 text-[#829675]" />
+              <span>{message.modelBadge}</span>
+            </span>
+          )}
         </div>
       </div>
     </div>

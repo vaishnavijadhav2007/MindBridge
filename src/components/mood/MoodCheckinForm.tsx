@@ -15,9 +15,11 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { MoodType, SleepQuality, MoodOption } from '../../types';
 import { useWellness } from '../../context/WellnessContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const MoodCheckinForm: React.FC = () => {
   const { addMoodEntry, moodConfirmedMessage, dismissMoodMessage } = useWellness();
+  const { user, isConfigured } = useAuth();
 
   const [currentMood, setCurrentMood] = useState<MoodType | null>(null);
   const [selectedFactors, setSelectedFactors] = useState<string[]>([]);
@@ -26,6 +28,8 @@ export const MoodCheckinForm: React.FC = () => {
   const [journalNote, setJournalNote] = useState<string>('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSavedSuccess, setIsSavedSuccess] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const moodOptions: MoodOption[] = [
     {
@@ -119,7 +123,7 @@ export const MoodCheckinForm: React.FC = () => {
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!currentMood) {
@@ -128,23 +132,35 @@ export const MoodCheckinForm: React.FC = () => {
     }
 
     setValidationError(null);
+    setSaveError(null);
+    setIsSubmitting(true);
 
-    // Save entry into context & localStorage
-    addMoodEntry({
-      mood: currentMood,
-      factors: selectedFactors,
-      stressLevel,
-      sleepQuality,
-      journalNote: journalNote.trim() || undefined
-    });
+    try {
+      const saved = await addMoodEntry({
+        mood: currentMood,
+        factors: selectedFactors,
+        stressLevel,
+        sleepQuality,
+        journalNote: journalNote.trim() || undefined,
+      });
 
-    setIsSavedSuccess(true);
-
-    // Reset optional fields for a fresh session after brief feedback
-    setTimeout(() => {
-      setSelectedFactors([]);
-      setJournalNote('');
-    }, 1000);
+      if (saved) {
+        setIsSavedSuccess(true);
+        // Reset optional fields for a fresh session after brief feedback
+        setTimeout(() => {
+          setSelectedFactors([]);
+          setJournalNote('');
+        }, 1000);
+      } else {
+        setSaveError('Unable to save check-in to database. Please check your Supabase connection and tables.');
+        setIsSavedSuccess(false);
+      }
+    } catch (err: any) {
+      setSaveError(err.message || 'An unexpected error occurred while saving.');
+      setIsSavedSuccess(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -367,13 +383,55 @@ export const MoodCheckinForm: React.FC = () => {
         {/* Section 3: Privacy Notice & Save Button */}
         <div className="pt-6 border-t border-[#F0E8DC] space-y-4">
           
-          {/* LocalStorage Notice as explicitly requested */}
+          {/* Storage Note */}
           <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-[#F3EBDD] border border-[#E4DACA] text-xs text-[#77736B]">
             <Lock className="w-4 h-4 text-[#829675] shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              <strong className="text-[#403B35]">Privacy & Storage Note:</strong> Your check-in entries are saved in your browser's <code className="text-[#56664F] bg-[#E9EFE7] px-1 py-0.5 rounded">localStorage</code> for this frontend prototype and are not stored in any external cloud database. To respect your privacy, avoid typing highly sensitive personal data.
+              {isConfigured && user ? (
+                <>
+                  <strong className="text-[#403B35]">Secure Database Storage:</strong> Your check-in entries are linked to your authenticated MindBridge account ({user.email}) and stored in your Supabase database. Reflections are private to you.
+                </>
+              ) : (
+                <>
+                  <strong className="text-[#403B35]">Local Session Mode:</strong> You are exploring MindBridge in demo mode. Check-in entries are stored in your browser session and are not sent to an external database.
+                </>
+              )}
             </p>
           </div>
+
+          {/* Validation Error */}
+          {validationError && (
+            <div className="p-3.5 rounded-xl bg-[#FEF0F0] border border-[#EDBBBB] text-xs text-[#C0392B] flex items-center justify-between gap-2.5 animate-in fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{validationError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setValidationError(null)}
+                className="text-xs font-semibold hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Database Save Error Message */}
+          {saveError && (
+            <div className="p-3.5 rounded-xl bg-[#FEF0F0] border border-[#EDBBBB] text-xs text-[#C0392B] flex items-center justify-between gap-2.5 animate-in fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{saveError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSaveError(null)}
+                className="text-xs font-semibold hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* Friendly Success Confirmation Message */}
           {isSavedSuccess && (
@@ -381,7 +439,7 @@ export const MoodCheckinForm: React.FC = () => {
               <div className="flex items-center gap-2.5">
                 <Sparkles className="w-5 h-5 text-[#829675] shrink-0" />
                 <p className="text-xs sm:text-sm font-medium text-[#403B35]">
-                  Check-in complete. Thank you for taking a moment for yourself.
+                  Check-in complete. Your mood has been saved to your journal.
                 </p>
               </div>
               <button
@@ -400,9 +458,11 @@ export const MoodCheckinForm: React.FC = () => {
               type="submit"
               variant="primary"
               size="lg"
+              disabled={isSubmitting}
+              isLoading={isSubmitting}
               className="w-full sm:w-auto px-8 py-3 font-semibold"
             >
-              Save Check-in
+              {isSubmitting ? 'Saving Check-in…' : 'Save Check-in'}
             </Button>
           </div>
 

@@ -119,8 +119,8 @@ export const MoodWellnessOverview: React.FC = () => {
           </div>
 
           <div className="mt-4 pt-3 border-t border-[#F0E8DC] flex items-center justify-between text-[11px] text-[#77736B]">
-            <span>Local prototype history</span>
-            <span className="text-[#829675] font-medium">{hasUserEntries ? 'Personal Data' : 'Demo Samples'}</span>
+            <span>Journal records</span>
+            <span className="text-[#829675] font-medium">{hasUserEntries ? 'Personal Database' : 'Demo Samples'}</span>
           </div>
         </Card>
 
